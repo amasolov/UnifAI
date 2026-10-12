@@ -7,6 +7,8 @@ Without this, the JWKS cache expiry at ~10 minutes triggers uncoordinated
 forks that produce orphan processes and spurious "Worker exited with code 1"
 log noise.
 """
+limit_request_line = 8190
+
 import faulthandler
 import logging
 import os
