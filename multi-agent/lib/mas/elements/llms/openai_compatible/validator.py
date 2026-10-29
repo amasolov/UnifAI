@@ -55,7 +55,7 @@ class OpenAICompatibleLLMValidator(BaseElementValidator):
         client.chat.completions.create(
             model=model_name,
             messages=[{"role": "user", "content": "hi"}],
-            max_tokens=1,
+            max_completion_tokens=1,
         )
 
     def validate(
@@ -63,6 +63,12 @@ class OpenAICompatibleLLMValidator(BaseElementValidator):
         config: OpenAICompatibleConfig,
         context: ValidationContext,
     ) -> ValidatorReport:
+        """Validate connectivity, credentials, and model availability.
+
+        Attempts ``GET /v1/models/{id}`` first.  When the gateway returns
+        404, 405, or 501 the validator falls back to a minimal chat
+        completion request to confirm the model is reachable.
+        """
         messages: List[ValidationMessage] = []
 
         try:

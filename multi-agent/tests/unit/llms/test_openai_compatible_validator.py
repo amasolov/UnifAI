@@ -116,7 +116,7 @@ class TestModelRetrieveFallback:
         client.chat.completions.create.assert_called_once()
         call_kwargs = client.chat.completions.create.call_args
         assert call_kwargs[1]["model"] == "test-model"
-        assert call_kwargs[1]["max_tokens"] == 1
+        assert call_kwargs[1]["max_completion_tokens"] == 1
 
     @patch("mas.elements.llms.openai_compatible.validator.OpenAI")
     def test_405_falls_back_to_chat_completion(self, mock_openai_cls):
@@ -134,6 +134,7 @@ class TestModelRetrieveFallback:
         report = validator.validate(_config(), _context())
 
         assert report.is_valid
+        client.models.retrieve.assert_called_once_with("test-model")
         client.chat.completions.create.assert_called_once()
         assert any(m.code == "MODEL_AVAILABLE" for m in report.messages)
 
@@ -149,6 +150,7 @@ class TestModelRetrieveFallback:
         report = validator.validate(_config(), _context())
 
         assert report.is_valid
+        client.models.retrieve.assert_called_once_with("test-model")
         client.chat.completions.create.assert_called_once()
 
     @patch("mas.elements.llms.openai_compatible.validator.OpenAI")
@@ -203,8 +205,8 @@ class TestChatCompletionProbe:
         client.completions.create.assert_not_called()
 
     @patch("mas.elements.llms.openai_compatible.validator.OpenAI")
-    def test_probe_sends_messages_array(self, mock_openai_cls):
-        """Chat completion probe must include a messages array."""
+    def test_probe_sends_complete_request(self, mock_openai_cls):
+        """Chat completion probe must send model, messages, and token limit."""
         client = MagicMock()
         client.models.retrieve.side_effect = _not_found_error()
         client.chat.completions.create.return_value = _fake_chat_completion()
@@ -214,6 +216,6 @@ class TestChatCompletionProbe:
         validator.validate(_config(), _context())
 
         call_kwargs = client.chat.completions.create.call_args[1]
-        assert "messages" in call_kwargs
-        assert len(call_kwargs["messages"]) == 1
-        assert call_kwargs["messages"][0]["role"] == "user"
+        assert call_kwargs["model"] == "test-model"
+        assert call_kwargs["messages"] == [{"role": "user", "content": "hi"}]
+        assert call_kwargs["max_completion_tokens"] == 1
