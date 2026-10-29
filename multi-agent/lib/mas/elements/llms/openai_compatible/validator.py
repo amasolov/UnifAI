@@ -37,20 +37,24 @@ class OpenAICompatibleLLMValidator(BaseElementValidator):
     - Model availability
     """
 
-    def _validate_via_completion(
+    def _validate_via_chat_completion(
         self,
         client: OpenAI,
         model_name: str,
     ) -> None:
         """
-        Validate model by making a minimal completion request.
+        Validate model by making a minimal chat completion request.
 
         Used for OpenAI-compatible APIs that don't implement /v1/models/{id}.
+        Uses the chat completions endpoint (``/v1/chat/completions``) because
+        many gateways and proxies only expose this endpoint and do not
+        support the legacy ``/v1/completions`` path.
+
         Raises appropriate OpenAI exceptions on failure.
         """
-        client.completions.create(
+        client.chat.completions.create(
             model=model_name,
-            prompt="test",
+            messages=[{"role": "user", "content": "hi"}],
             max_tokens=1,
         )
 
@@ -77,8 +81,20 @@ class OpenAICompatibleLLMValidator(BaseElementValidator):
                     client.models.retrieve(config.model_name)
                 except NotFoundError:
                     # Many OpenAI-compatible APIs don't implement /v1/models/{id}
-                    # Fall back to a minimal completion request
-                    self._validate_via_completion(client, config.model_name)
+                    # Fall back to a minimal chat completion request
+                    self._validate_via_chat_completion(client, config.model_name)
+                except APIStatusError as exc:
+                    if exc.status_code in (405, 501):
+                        # Some API gateways return "Method Not Allowed"
+                        # or "Not Implemented" for the single-model
+                        # retrieval endpoint while still supporting
+                        # chat completions.  Fall back to a chat
+                        # completion probe.
+                        self._validate_via_chat_completion(
+                            client, config.model_name,
+                        )
+                    else:
+                        raise
 
                 messages.append(self._info(
                     "MODEL_AVAILABLE",
